@@ -1,35 +1,47 @@
 use crossterm::{
-    cursor, event::{poll, read, Event::Key, KeyCode}, style::{self, Stylize}, terminal::{self, BeginSynchronizedUpdate, Clear, EndSynchronizedUpdate}, ExecutableCommand, QueueableCommand
+    cursor, 
+    event::{poll, read, Event::Key, KeyCode},
+    style::{self, Stylize},
+    terminal::{self, BeginSynchronizedUpdate, Clear, EndSynchronizedUpdate}, 
+    ExecutableCommand, QueueableCommand
 };
 use std::{
-    io,
-    time::{Instant, Duration},
+    io::{Result, Stdout, stdout},
+    time::{Duration, Instant},
 };
+use std::vec;
 
-fn main() -> io::Result<()> {
-    let mut stdout = io::stdout();
-    let start = Instant::now();
-    const FRAMETIME: f64 = 1./12.;
-    terminal::enable_raw_mode()?;
 
-    loop {
-        stdout.execute(BeginSynchronizedUpdate)?;
-        stdout.queue(Clear(terminal::ClearType::All))?;
-        let (cols, rows) = terminal::size()?;
-        for y in 0..rows {
-            for x in 0..cols {
+struct App {
+    stdout: Stdout,
+    screen: Vec<Vec<char>>,
+    cols: u16,
+    rows: u16,
+    cursor: (u16, u16),
+    running: bool,
+    start: Instant,
+}
+
+impl App {
+    fn render(&mut self) -> Result<()>{
+        self.stdout.execute(BeginSynchronizedUpdate)?;
+        self.stdout.queue(Clear(terminal::ClearType::All))?;
+        self.stdout.queue(cursor::MoveTo(0, 0))?;
+
+        for y in 0..self.rows {
+            for x in 0..self.cols {
                 // in this loop we are more efficient by not flushing the buffer.
                 let intensity = (
-	    			(10. * 
+	    			(8. * 
                         f64::sin(
 	    				x as f64 * 0.1 
 	    				- y as f64 * 0.15 
-	    				+ start.elapsed().as_secs_f64() * 2.)
+	    				+ self.start.elapsed().as_secs_f64() * 3.)
                     ) as i8
                     + 30
                 ) as u8;
 
-                let color = if y == 0 || y == rows - 1 || x == 0 || x == 1 || x == cols - 1 || x == cols - 2 {
+                let color = if y == 0 || y == self.rows - 1 || x == 0 || x == 1 || x == self.cols - 1 || x == self.cols - 2 {
                     style::Color::Rgb {
                         r: intensity + 30, 
                         g: 40,
@@ -43,20 +55,71 @@ fn main() -> io::Result<()> {
                     }
                 };
 
-                stdout
-                    .queue(style::PrintStyledContent(" ".on(color)))?;
+                self.stdout.queue(style::PrintStyledContent(self.screen[y as usize][x as usize].on(color)))?;
             }
         }
-        stdout.queue(cursor::MoveTo(0, 0))?;
-        stdout.execute(EndSynchronizedUpdate)?;
-        if poll(Duration::from_secs_f64(FRAMETIME - (start.elapsed().as_secs_f64() % FRAMETIME)))? {
-            match read()? {
-                Key(key) => if key.code == KeyCode::Char('q') { break; },
-                _ => {}
+        self.stdout.queue(cursor::MoveTo(self.cursor.0, self.cursor.1))?;
+        self.stdout.execute(EndSynchronizedUpdate)?;
+        return Ok(());
+    }
+
+    fn handle_input(&mut self) -> Result<()> {
+        if self.running {
+            if poll(Duration::from_secs_f64(FRAMETIME - (self.start.elapsed().as_secs_f64() % FRAMETIME)))? {
+                match read()? {
+                    Key(key) => match key.code {
+                        KeyCode::Char('q') => self.exit()?,
+                        KeyCode::Right => {if self.cursor.0 < self.cols { self.cursor.0 += 1 } },
+                        KeyCode::Left => {if self.cursor.0 > 0 { self.cursor.0 -= 1 } },
+                        KeyCode::Down => {if self.cursor.1 < self.rows { self.cursor.1 += 1 } },
+                        KeyCode::Up => {if self.cursor.1 > 0 { self.cursor.1 -= 1 } },
+                        _ => {}
+                    },
+                    
+                    _ => {}
+                }
             }
+        }
+        return Ok(());
+    }
+
+    fn exit(&mut self) -> Result<()> {
+        self.running = false;
+        self.stdout.execute(Clear(terminal::ClearType::All))?;
+        self.stdout.execute(cursor::MoveTo(0, 0))?;
+        return Ok(());
+    }
+
+    fn run(&mut self) -> Result<()> {
+        loop {
+            self.render()?;
+            self.handle_input()?;
+            if !self.running { return Ok(()); }
         }
     }
-    stdout.execute(Clear(terminal::ClearType::All))?;
+}
+
+const FRAMETIME: f64 = 1./12.;
+
+fn main() -> Result<()> {
+    let stdout = stdout();
+    let start = Instant::now();
+    terminal::enable_raw_mode()?;
+    let cols = terminal::size()?.0;
+    let rows = terminal::size()?.1;
+
+    let mut app = App { 
+        stdout,
+        screen: vec![vec![' '; cols as usize]; rows as usize],
+        cols,
+        rows,
+        cursor: (0, 0),
+        running: true,
+        start,
+    };
+
+    app.run()?;
+
     terminal::disable_raw_mode()?;
     println!("bye bye");
     return Ok(());
