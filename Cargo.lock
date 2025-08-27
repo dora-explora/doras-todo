@@ -87,6 +87,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "doras-todo"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -256,13 +263,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "todo"
-version = "0.1.0"
-dependencies = [
- "crossterm",
 ]
 
 [[package]]
