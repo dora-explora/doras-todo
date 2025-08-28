@@ -13,10 +13,8 @@ use std::{
 
 const FRAMETIME: f64 = 1./12.;
 
-const X_MAX: usize = 85;
-const Y_MAX: usize = 35;
-const VIEW_X_MAX: usize = 81;
-const VIEW_Y_MAX: usize = 32;
+const X_MAX: usize = 105;
+const Y_MAX: usize = 36; 
 
 struct App {
     stdout: Stdout,
@@ -68,8 +66,8 @@ impl App {
     }
 
     fn clear_view(&mut self) {
-        for i in 3..VIEW_X_MAX {
-            for j in 5..VIEW_Y_MAX {
+        for i in 3..(X_MAX - 4) {
+            for j in 5..(Y_MAX - 2) {
                 self.screen_text[j][i] = ' ';
                 self.screen_color[j][i] = Color::White;
             }
@@ -77,21 +75,15 @@ impl App {
     }
 
     fn switch_tab(&mut self) {
+        self.tab += 1;
+        self.tab %= 3;
+
         self.clear_view();
         match self.tab {
-            0 => {
-                self.tab = 1;
-                // self.render_something();
-            }
-            1 => {
-                self.tab = 2;
-                self.render_calendar();
-            }
-            2 => {
-                self.tab = 0;
-                // self.render_something();
-            }
-            _ => {} // this will never happen
+            0 => {}, // self.render_something();
+            1 => {}, // self.render_something();
+            2 => self.render_calendar(),
+            _ => {}, // this will never happen
         }
     }
 
@@ -140,25 +132,25 @@ impl App {
         self.screen_text[3][50] = '│';
 
         self.screen_text[4][2] = '╭';
-        self.screen_text[4][VIEW_X_MAX] = '╮';
-        self.screen_text[VIEW_Y_MAX][2] = '╰';
-        self.screen_text[VIEW_Y_MAX][VIEW_X_MAX] = '╯';
+        self.screen_text[4][X_MAX - 4] = '╮';
+        self.screen_text[Y_MAX - 2][2] = '╰';
+        self.screen_text[Y_MAX - 2][X_MAX - 4] = '╯';
 
         for i in 3..50 {
             self.screen_text[1][i] = '─';
         }
 
-        for i in 3..VIEW_X_MAX {
-            self.screen_text[VIEW_Y_MAX][i] = '─';
+        for i in 3..(X_MAX - 4) {
+            self.screen_text[Y_MAX - 2][i] = '─';
             self.screen_text[4][i] = '─';
         }
 
-        for i in 5..VIEW_Y_MAX {
+        for i in 5..(Y_MAX - 2) {
             self.screen_text[i][2] = '│';
         }
 
-        for i in 5..VIEW_Y_MAX {
-            self.screen_text[i][VIEW_X_MAX] = '│';
+        for i in 5..(Y_MAX - 2) {
+            self.screen_text[i][X_MAX - 4] = '│';
         }
 
         self.color_area(Color::DarkGrey, 2, 1, 50, 3);
@@ -200,22 +192,33 @@ impl App {
 
     fn render_calendar(&mut self) {
         self.screen_text[5][3] = '┌';
-        self.screen_text[5][VIEW_X_MAX] = '┐';
-        self.screen_text[VIEW_Y_MAX][3] = '└';
-        self.screen_text[VIEW_Y_MAX][VIEW_X_MAX] = '┘';
+        self.screen_text[5][X_MAX - 5] = '┐';
+        self.screen_text[Y_MAX - 3][3] = '└';
+        self.screen_text[Y_MAX - 3][X_MAX - 5] = '┘';
         
-        for i in 4..VIEW_X_MAX {
+        for i in 4..(X_MAX - 5) {
             self.screen_text[5][i] = '─';
-            self.screen_text[VIEW_Y_MAX][i] = '─';
+            self.screen_text[Y_MAX - 3][i] = '─';
         }
 
-        for i in 4..VIEW_Y_MAX {
+        for i in 6..(Y_MAX - 3) {
             self.screen_text[i][3] = '│';
-            self.screen_text[i][VIEW_X_MAX] = '│';
+            self.screen_text[i][X_MAX - 5] = '│';
+        }
+
+        const HORIZONTAL_SPACING: usize = 4;
+        
+        for i in 1..7 {
+            let row = HORIZONTAL_SPACING * (i + 1) + 1;
+            for j in 4..(X_MAX - 5) {
+                self.screen_text[row][j] = '─';
+            }
+            self.screen_text[row][3] = '├';
+            self.screen_text[row][X_MAX - 5] = '┤';
         }
     }
 
-    fn draw(&mut self) -> Result<()>{
+    fn draw(&mut self) -> Result<()> {
         self.stdout.execute(BeginSynchronizedUpdate)?;
         self.stdout.queue(Clear(terminal::ClearType::All))?;
         self.stdout.queue(cursor::MoveTo(0, 0))?;
