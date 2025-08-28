@@ -13,12 +13,15 @@ use std::{
 
 const FRAMETIME: f64 = 1./12.;
 
+const X_MAX: usize = 85;
+const Y_MAX: usize = 35;
+const VIEW_X_MAX: usize = 81;
+const VIEW_Y_MAX: usize = 32;
+
 struct App {
     stdout: Stdout,
     screen_text: Vec<Vec<char>>,
     screen_color: Vec<Vec<Color>>,
-    cols: u16,
-    rows: u16,
     running: bool,
     start: Instant,
     tab: usize,
@@ -36,8 +39,6 @@ fn main() -> Result<()> {
         stdout,
         screen_text: vec![vec![' '; cols as usize]; rows as usize],
         screen_color: vec![vec![Color::White; cols as usize]; rows as usize],
-        cols,
-        rows,
         running: true,
         start,
         tab: 0,
@@ -66,16 +67,44 @@ impl App {
         return Ok(());
     }
 
+    fn clear_view(&mut self) {
+        for i in 3..VIEW_X_MAX {
+            for j in 5..VIEW_Y_MAX {
+                self.screen_text[j][i] = ' ';
+                self.screen_color[j][i] = Color::White;
+            }
+        }
+    }
+
+    fn switch_tab(&mut self) {
+        self.clear_view();
+        match self.tab {
+            0 => {
+                self.tab = 1;
+                // self.render_something();
+            }
+            1 => {
+                self.tab = 2;
+                self.render_calendar();
+            }
+            2 => {
+                self.tab = 0;
+                // self.render_something();
+            }
+            _ => {} // this will never happen
+        }
+    }
+
     fn handle_input(&mut self) -> Result<()> {
         if self.running {
             if poll(Duration::from_secs_f64(FRAMETIME - (self.start.elapsed().as_secs_f64() % FRAMETIME)))? {
                 match read()? {
                     Key(key) => match key.code {
                         KeyCode::Char('q') => self.exit()?,
-                        KeyCode::Tab => { self.tab += 1; self.tab %= 3; }
-                        // KeyCode::Right => if self.cursor.0 < self.cols { self.cursor.0 += 1 },
+                        KeyCode::Tab => self.switch_tab(),
+                        // KeyCode::Right => if self.cursor.0 < X_MAX { self.cursor.0 += 1 },
                         // KeyCode::Left => if self.cursor.0 > 0 { self.cursor.0 -= 1 },
-                        // KeyCode::Down => if self.cursor.1 < self.rows { self.cursor.1 += 1 },
+                        // KeyCode::Down => if self.cursor.1 < Y_MAX { self.cursor.1 += 1 },
                         // KeyCode::Up => if self.cursor.1 > 0 { self.cursor.1 -= 1 },
                         _ => {}
                     },
@@ -95,7 +124,7 @@ impl App {
         }
     }
 
-    fn render_frame(&mut self) -> Result<()> {
+    fn render_frame(&mut self) {
         self.screen_text[1][2] = '╭';
         self.screen_text[2][2] = '│';
         self.screen_text[3][2] = '│';
@@ -111,28 +140,25 @@ impl App {
         self.screen_text[3][50] = '│';
 
         self.screen_text[4][2] = '╭';
-        self.screen_text[4][self.cols as usize - 3] = '╮';
-        self.screen_text[self.rows as usize - 2][2] = '╰';
-        self.screen_text[self.rows as usize - 2][self.cols as usize - 3] = '╯';
+        self.screen_text[4][VIEW_X_MAX] = '╮';
+        self.screen_text[VIEW_Y_MAX][2] = '╰';
+        self.screen_text[VIEW_Y_MAX][VIEW_X_MAX] = '╯';
 
         for i in 3..50 {
             self.screen_text[1][i] = '─';
         }
 
-        for i in 3..(self.cols as usize - 3) {
-            self.screen_text[self.rows as usize - 2][i] = '─';
-        }
-
-        for i in 3..(self.cols as usize - 3) {
+        for i in 3..VIEW_X_MAX {
+            self.screen_text[VIEW_Y_MAX][i] = '─';
             self.screen_text[4][i] = '─';
         }
 
-        for i in 5..(self.rows as usize - 2) {
+        for i in 5..VIEW_Y_MAX {
             self.screen_text[i][2] = '│';
         }
 
-        for i in 5..(self.rows as usize - 2) {
-            self.screen_text[i][self.cols as usize - 3] = '│';
+        for i in 5..VIEW_Y_MAX {
+            self.screen_text[i][VIEW_X_MAX] = '│';
         }
 
         self.color_area(Color::DarkGrey, 2, 1, 50, 3);
@@ -170,8 +196,23 @@ impl App {
             },
             _ => {}
         }
+    }
 
-        return Ok(());
+    fn render_calendar(&mut self) {
+        self.screen_text[5][3] = '┌';
+        self.screen_text[5][VIEW_X_MAX] = '┐';
+        self.screen_text[VIEW_Y_MAX][3] = '└';
+        self.screen_text[VIEW_Y_MAX][VIEW_X_MAX] = '┘';
+        
+        for i in 4..VIEW_X_MAX {
+            self.screen_text[5][i] = '─';
+            self.screen_text[VIEW_Y_MAX][i] = '─';
+        }
+
+        for i in 4..VIEW_Y_MAX {
+            self.screen_text[i][3] = '│';
+            self.screen_text[i][VIEW_X_MAX] = '│';
+        }
     }
 
     fn draw(&mut self) -> Result<()>{
@@ -179,8 +220,8 @@ impl App {
         self.stdout.queue(Clear(terminal::ClearType::All))?;
         self.stdout.queue(cursor::MoveTo(0, 0))?;
 
-        for y in 0..self.rows {
-            for x in 0..self.cols {
+        for y in 0..Y_MAX {
+            for x in 0..X_MAX {
                 // in this loop we are more efficient by not flushing the buffer.
                 let intensity = (
 	    			(8. * 
@@ -192,7 +233,7 @@ impl App {
                     + 30
                 ) as u8;
 
-                let color = if y == 0 || y == self.rows - 1 || x == 0 || x == 1 || x == self.cols - 1 || x == self.cols - 2 {
+                let color = if y == 0 || y == Y_MAX - 1 || x == 0 || x == 1 || x == X_MAX - 1 || x == X_MAX - 2 {
                     style::Color::Rgb {
                         r: intensity + 30, 
                         g: 40,
@@ -218,7 +259,13 @@ impl App {
     }
 
     fn render(&mut self) -> Result<()> {
-        self.render_frame()?;
+        self.render_frame();
+        match self.tab {
+            0 => {},
+            1 => {},
+            2 => self.render_calendar(),
+            _ => {}
+        }
         self.draw()?;
 
         return Ok(());
