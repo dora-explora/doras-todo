@@ -21,6 +21,7 @@ struct App {
     rows: u16,
     running: bool,
     start: Instant,
+    tab: usize,
 }
 
 fn main() -> Result<()> {
@@ -39,6 +40,7 @@ fn main() -> Result<()> {
         rows,
         running: true,
         start,
+        tab: 0,
     };
 
     app.run()?;
@@ -50,11 +52,11 @@ fn main() -> Result<()> {
 
 impl App {
     fn run(&mut self) -> Result<()> {
-        loop {
+        while self.running {
             self.render()?;
             self.handle_input()?;
-            if !self.running { return Ok(()); }
         }
+        return Ok(());
     }
 
     fn exit(&mut self) -> Result<()> {
@@ -70,10 +72,11 @@ impl App {
                 match read()? {
                     Key(key) => match key.code {
                         KeyCode::Char('q') => self.exit()?,
-                        // KeyCode::Right => { if self.cursor.0 < self.cols { self.cursor.0 += 1 } },
-                        // KeyCode::Left => { if self.cursor.0 > 0 { self.cursor.0 -= 1 } },
-                        // KeyCode::Down => { if self.cursor.1 < self.rows { self.cursor.1 += 1 } },
-                        // KeyCode::Up => { if self.cursor.1 > 0 { self.cursor.1 -= 1 } },
+                        KeyCode::Tab => { self.tab += 1; self.tab %= 3; }
+                        // KeyCode::Right => if self.cursor.0 < self.cols { self.cursor.0 += 1 },
+                        // KeyCode::Left => if self.cursor.0 > 0 { self.cursor.0 -= 1 },
+                        // KeyCode::Down => if self.cursor.1 < self.rows { self.cursor.1 += 1 },
+                        // KeyCode::Up => if self.cursor.1 > 0 { self.cursor.1 -= 1 },
                         _ => {}
                     },
                     
@@ -92,25 +95,81 @@ impl App {
         }
     }
 
-    fn render_tabs(&mut self) -> Result<()> {
+    fn render_frame(&mut self) -> Result<()> {
         self.screen_text[1][2] = '╭';
         self.screen_text[2][2] = '│';
         self.screen_text[3][2] = '│';
-        for i in 3..18 {
-            self.screen_text[1][i] = '─';
-        }
-        self.screen_text[1][18] = '╮';
+
         self.screen_text[2][18] = '│';
         self.screen_text[3][18] = '│';
 
-        for i in 19..34 {
-            self.screen_text[1][i] = '─';
-        }
-        self.screen_text[1][34] = '╮';
         self.screen_text[2][34] = '│';
         self.screen_text[3][34] = '│';
 
-        self.color_area(Color::DarkGrey, 19, 1, 34, 4);
+        self.screen_text[1][50] = '╮';
+        self.screen_text[2][50] = '│';
+        self.screen_text[3][50] = '│';
+
+        self.screen_text[4][2] = '╭';
+        self.screen_text[4][self.cols as usize - 3] = '╮';
+        self.screen_text[self.rows as usize - 2][2] = '╰';
+        self.screen_text[self.rows as usize - 2][self.cols as usize - 3] = '╯';
+
+        for i in 3..50 {
+            self.screen_text[1][i] = '─';
+        }
+
+        for i in 3..(self.cols as usize - 3) {
+            self.screen_text[self.rows as usize - 2][i] = '─';
+        }
+
+        for i in 3..(self.cols as usize - 3) {
+            self.screen_text[4][i] = '─';
+        }
+
+        for i in 5..(self.rows as usize - 2) {
+            self.screen_text[i][2] = '│';
+        }
+
+        for i in 5..(self.rows as usize - 2) {
+            self.screen_text[i][self.cols as usize - 3] = '│';
+        }
+
+        self.color_area(Color::DarkGrey, 2, 1, 50, 3);
+
+        match self.tab {
+            0 => {
+                self.color_area(Color::White, 2, 1, 18, 3);
+                self.screen_text[1][18] = '╮';
+                self.screen_text[1][34] = '┬';
+                for i in 3..18 {
+                    self.screen_text[4][i] = ' ';
+                }
+                self.screen_text[4][2] = '│';
+                self.screen_text[4][18] = '╰';
+            },
+            1 => { 
+                self.color_area(Color::White, 18, 1, 34, 3);
+                self.screen_text[1][18] = '╭';
+                self.screen_text[1][34] = '╮';
+                for i in 19..34 {
+                    self.screen_text[4][i] = ' ';
+                }
+                self.screen_text[4][18] = '╯';
+                self.screen_text[4][34] = '╰';
+            },
+            2 => { 
+                self.color_area(Color::White, 34, 1, 50, 3);
+                self.screen_text[1][18] = '┬';
+                self.screen_text[1][34] = '╭';
+                for i in 35..50 {
+                    self.screen_text[4][i] = ' ';
+                }
+                self.screen_text[4][34] = '╯';
+                self.screen_text[4][50] = '╰';
+            },
+            _ => {}
+        }
 
         return Ok(());
     }
@@ -159,7 +218,7 @@ impl App {
     }
 
     fn render(&mut self) -> Result<()> {
-        self.render_tabs()?;
+        self.render_frame()?;
         self.draw()?;
 
         return Ok(());
