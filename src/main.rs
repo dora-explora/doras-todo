@@ -5,10 +5,12 @@ use crossterm::{
     terminal::{self, BeginSynchronizedUpdate, Clear, EndSynchronizedUpdate}, 
     ExecutableCommand, QueueableCommand
 };
-use chrono::{NaiveDate, Datelike, Weekday};
+use chrono::NaiveDate;
 use std::{
     io::{stdout, Result, Stdout}, time::{Duration, Instant}, vec
 };
+
+mod tabs;
 
 const FRAMETIME: f64 = 1./12.;
 
@@ -31,7 +33,16 @@ struct Task {
     subject: Subject,
     description: String,
     date: chrono::NaiveDate,
-    importance: usize,
+}
+
+impl Task {
+    fn new(subject: Subject, description: &str, year: i32, month: u32, day: u32) -> Task {
+        return Task { 
+            subject,
+            description: description.to_string(),
+            date: NaiveDate::from_ymd_opt(year, month, day).expect(format!("{month}/{day}/{year} is not a valid date").as_str()),
+        };
+    }
 }
 
 struct App {
@@ -49,12 +60,13 @@ struct App {
 fn main() -> Result<()> {
     let mut stdout = stdout();
     let tasks = vec![
-        Task { 
-            subject: Subject::APUSH,
-            description: "example description".to_string(),
-            date: NaiveDate::from_ymd_opt(2025, 9, 1).expect("That's not a valid date"),
-            importance: 2
-        }
+        Task::new(Subject::APUSH, "Unit 1 Chapter 1 Key Terms", 2025, 8, 24),
+        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 8, 25),
+        Task::new(Subject::Lang, "Pages 4-6 & 10-12 Notes", 2025, 8, 26),
+        Task::new(Subject::Physics, "Helioseismology Dimensional Analysis", 2025, 8, 27),
+        Task::new(Subject::Stats, "Chapter 1 HW 1", 2025, 8, 28),
+        Task::new(Subject::None, "Shabbat", 2025, 8, 29),
+        Task::new(Subject::Film, "Finish PSA Script", 2025, 8, 30),
     ];
 
     terminal::enable_raw_mode()?;
@@ -89,10 +101,6 @@ impl App {
         self.render_frame();
         self.render_tabs();
 
-        self.render_string("▄▄              █  ▄▄   ▄▄▄     ▄▄     ", 60, 1);
-        self.render_string("█ █ █▀█ █▄▀ █▀█   ▀▄     █  █▀█ █ █ █▀█", 60, 2);
-        self.render_string("█▄▀ █▄█ █   █▄█▄  ▄▄▀    █  █▄█ █▄▀ █▄█", 60, 3);
-
         while self.running {
             self.render()?;
             self.handle_input()?;
@@ -107,7 +115,7 @@ impl App {
         return Ok(());
     }
 
-    fn clear_view(&mut self) {
+    fn clear_tab(&mut self) {
         for i in 3..(X_MAX - 4) {
             for j in 5..(Y_MAX - 2) {
                 self.screen_text[j][i] = ' ';
@@ -116,15 +124,16 @@ impl App {
         }
     }
 
-    fn switch_tab(&mut self) {
-        self.tab += 1;
-        self.tab %= 3;
+    fn switch_tab(&mut self, backward: bool) {
+        self.tab += match backward { false => 1, true => 3 };
+        self.tab %= 4;
 
-        self.clear_view();
+        self.clear_tab();
         match self.tab {
-            0 => {}, // self.render_something();
-            1 => self.render_calendar(),
-            2 => {}, // self.render_something();
+            0 => self.render_today_tab(),
+            1 => self.render_week_tab(),
+            2 => self.render_month_tab(),
+            3 => self.render_entry_tab(),
             _ => {}, // this will never happen
         }
         self.render_tabs();
@@ -136,7 +145,8 @@ impl App {
                 match read()? {
                     Key(key) => match key.code {
                         KeyCode::Char('q') => self.exit()?,
-                        KeyCode::Tab => self.switch_tab(),
+                        KeyCode::Tab => self.switch_tab(false),
+                        KeyCode::BackTab => self.switch_tab(true),
                         // KeyCode::Right => if self.cursor.0 < X_MAX { self.cursor.0 += 1 },
                         // KeyCode::Left => if self.cursor.0 > 0 { self.cursor.0 -= 1 },
                         // KeyCode::Down => if self.cursor.1 < Y_MAX { self.cursor.1 += 1 },
@@ -171,24 +181,23 @@ impl App {
         self.screen_text[2][2] = '│';
         self.screen_text[3][2] = '│';
 
-        self.screen_text[2][18] = '│';
-        self.screen_text[3][18] = '│';
+        self.screen_text[2][14] = '│';
+        self.screen_text[3][14] = '│';
 
-        self.screen_text[2][34] = '│';
-        self.screen_text[3][34] = '│';
+        self.screen_text[2][26] = '│';
+        self.screen_text[3][26] = '│';
 
-        self.screen_text[1][50] = '╮';
-        self.screen_text[2][50] = '│';
-        self.screen_text[3][50] = '│';
+        self.screen_text[2][39] = '│';
+        self.screen_text[3][39] = '│';
+
+        self.screen_text[1][52] = '╮';
+        self.screen_text[2][52] = '│';
+        self.screen_text[3][52] = '│';
 
         self.screen_text[4][2] = '╭';
         self.screen_text[4][X_MAX - 4] = '╮';
         self.screen_text[Y_MAX - 2][2] = '╰';
         self.screen_text[Y_MAX - 2][X_MAX - 4] = '╯';
-
-        for i in 3..50 {
-            self.screen_text[1][i] = '─';
-        }
 
         for i in 3..(X_MAX - 4) {
             self.screen_text[Y_MAX - 2][i] = '─';
@@ -203,121 +212,69 @@ impl App {
             self.screen_text[i][X_MAX - 4] = '│';
         }
 
-        self.render_string("Today", 8, 2);
-        self.render_string("This Week", 22, 2);
-        self.render_string("This Month", 37, 2);
+        self.render_string("Today", 6, 2);
+        self.render_string("This Week", 16, 2);
+        self.render_string("This Month", 28, 2);
+        self.render_string("Add Task", 42, 2);
+
+        self.render_string("▄▄              ▄  ▄▄   ▄▄▄     ▄▄     ",59, 1);
+        self.render_string("█ █ █▀█ █▄▀ ▄▀█ ▀ ▀▄     █  █▀█ █ █ █▀█",59, 2);
+        self.render_string("█▄▀ █▄█ █   ▀▄█   ▄▄▀    █  █▄█ █▄▀ █▄█",59, 3);
     }
 
     fn render_tabs(&mut self) {
-        for i in 3..=50 {
+        for i in 3..52 {
+            self.screen_text[1][i] = '─';
             self.screen_text[4][i] = '─';
         }
 
-        self.color_area(Color::DarkGrey, 2, 1, 50, 3);
+        self.screen_text[4][2] = '╭';
+        self.screen_text[1][14] = '┬';
+        self.screen_text[1][26] = '┬';
+        self.screen_text[1][39] = '┬';
+
+        self.color_area(Color::DarkGrey, 2, 1, 52, 3);
         match self.tab {
             0 => {
-                self.color_area(Color::White, 2, 1, 18, 3);
-                self.screen_text[1][18] = '╮';
-                self.screen_text[1][34] = '┬';
-                for i in 3..18 {
+                self.color_area(Color::White, 2, 1, 14, 3);
+                self.screen_text[1][14] = '╮';
+                for i in 3..14 {
                     self.screen_text[4][i] = ' ';
                 }
                 self.screen_text[4][2] = '│';
-                self.screen_text[4][18] = '╰';
+                self.screen_text[4][14] = '╰';
+                self.screen_text[4][52] = '─';
             },
             1 => { 
-                self.color_area(Color::White, 18, 1, 34, 3);
-                self.screen_text[1][18] = '╭';
-                self.screen_text[1][34] = '╮';
-                for i in 19..34 {
+                self.color_area(Color::White, 14, 1, 26, 3);
+                self.screen_text[1][14] = '╭';
+                self.screen_text[1][26] = '╮';
+                self.screen_text[4][14] = '╯';
+                self.screen_text[4][26] = '╰';
+                for i in 15..26 {
                     self.screen_text[4][i] = ' ';
                 }
-                self.screen_text[4][2] = '╭';
-                self.screen_text[4][18] = '╯';
-                self.screen_text[4][34] = '╰';
             },
             2 => { 
-                self.color_area(Color::White, 34, 1, 50, 3);
-                self.screen_text[1][18] = '┬';
-                self.screen_text[1][34] = '╭';
-                for i in 35..50 {
+                self.color_area(Color::White, 26, 1, 39, 3);
+                self.screen_text[1][26] = '╭';
+                self.screen_text[1][39] = '╮';
+                self.screen_text[4][26] = '╯';
+                self.screen_text[4][39] = '╰';
+                for i in 27..39 {
                     self.screen_text[4][i] = ' ';
                 }
-                self.screen_text[4][34] = '╯';
-                self.screen_text[4][50] = '╰';
+            },
+            3 => { 
+                self.color_area(Color::White, 39, 1, 52, 3);
+                self.screen_text[1][39] = '╭';
+                self.screen_text[4][39] = '╯';
+                self.screen_text[4][52] = '╰';
+                for i in 40..52 {
+                    self.screen_text[4][i] = ' ';
+                }
             },
             _ => {}
-        }
-    }
-
-    fn task_colors(&mut self) -> Vec<Color> {
-        let mut colors: Vec<Color> = Vec::new();
-        for task in self.tasks.clone() {
-            let mut color = match task.subject {
-                Subject::Film => Color::Rgb{ r: 127, g: 0, b: 0 },
-                Subject::Physics => Color::Rgb{ r: 192, g: 127, b: 0 },
-                Subject::Stats => Color::Rgb{ r: 0, g: 127, b: 127 },
-                Subject::APUSH => Color::Rgb{ r: 0, g: 127, b: 0 },
-                Subject::Compsci => Color::Rgb{ r: 0, g: 0, b: 127 },
-                Subject::Lang => Color::Rgb{ r: 127, g: 0, b: 127 },
-                Subject::None => Color::Grey,
-            };
-        }
-        return colors;
-    }
-
-    fn render_calendar(&mut self) {
-        self.screen_text[5][3] = '┌';
-        self.screen_text[5][X_MAX - 5] = '┐';
-        self.screen_text[Y_MAX - 3][3] = '└';
-        self.screen_text[Y_MAX - 3][X_MAX - 5] = '┘';
-        
-        for i in 4..(X_MAX - 5) {
-            self.screen_text[5][i] = '─';
-            self.screen_text[Y_MAX - 3][i] = '─';
-        }
-
-        for i in 6..(Y_MAX - 3) {
-            self.screen_text[i][3] = '│';
-            self.screen_text[i][X_MAX - 5] = '│';
-        }
-
-        const HORIZONTAL_SPACING: usize = 4;
-        
-        for i in 2..=7 {
-            let row = HORIZONTAL_SPACING * (i) + 1;
-            for j in 4..(X_MAX - 5) {
-                self.screen_text[row][j] = '─';
-            }
-            self.screen_text[row][3] = '├';
-            self.screen_text[row][X_MAX - 5] = '┤';
-        }
-
-        const WEEKDAY_HIGHLIGHT: Color = Color::Rgb{r: 255, g: 180, b: 255 }; 
-        let y = match self.today.weekday(){
-            Weekday::Sun => 5,
-            Weekday::Mon => 9,
-            Weekday::Tue => 13,
-            Weekday::Wed => 17,
-            Weekday::Thu => 21,
-            Weekday::Fri => 25,
-            Weekday::Sat => 29,
-        };
-        self.color_area(WEEKDAY_HIGHLIGHT, 4, y, X_MAX - 6, y);
-        self.color_area(WEEKDAY_HIGHLIGHT, 4, y + 4, X_MAX - 6, y + 4);
-
-        for task in self.tasks.clone() {
-            if task.date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
-                let y = match task.date.weekday() {
-                    Weekday::Sun => 6,
-                    Weekday::Mon => 10,
-                    Weekday::Tue => 14,
-                    Weekday::Wed => 18,
-                    Weekday::Thu => 22,
-                    Weekday::Fri => 26,
-                    Weekday::Sat => 30,
-                };
-            }
         }
     }
 
@@ -328,7 +285,6 @@ impl App {
 
         for y in 0..Y_MAX {
             for x in 0..X_MAX {
-                // in this loop we are more efficient by not flushing the buffer.
                 let intensity = (
 	    			(8. * 
                         f64::sin(
