@@ -5,16 +5,34 @@ use crossterm::{
     terminal::{self, BeginSynchronizedUpdate, Clear, EndSynchronizedUpdate}, 
     ExecutableCommand, QueueableCommand
 };
+use chrono::{NaiveDate, Datelike, Weekday};
 use std::{
-    io::{Result, Stdout, stdout},
-    time::{Duration, Instant},
-    vec,
+    io::{stdout, Result, Stdout}, time::{Duration, Instant}, vec
 };
 
 const FRAMETIME: f64 = 1./12.;
 
 const X_MAX: usize = 105;
 const Y_MAX: usize = 36; 
+
+#[derive(Clone, Copy)]
+enum Subject {
+    Film,
+    Physics,
+    Stats,
+    APUSH,
+    Compsci,
+    Lang,
+    None,
+}
+
+#[derive(Clone)]
+struct Task {
+    subject: Subject,
+    description: String,
+    date: chrono::NaiveDate,
+    importance: usize,
+}
 
 struct App {
     stdout: Stdout,
@@ -23,24 +41,28 @@ struct App {
     running: bool,
     start: Instant,
     tab: usize,
+    tasks: Vec<Task>,
+    today: NaiveDate
 }
+
 
 fn main() -> Result<()> {
     let mut stdout = stdout();
-    let start = Instant::now();
+    let tasks = vec![
+        Task { 
+            subject: Subject::APUSH,
+            description: "example description".to_string(),
+            date: NaiveDate::from_ymd_opt(2025, 9, 1).expect("That's not a valid date"),
+            importance: 2
+        }
+    ];
 
     terminal::enable_raw_mode()?;
     stdout.execute(cursor::Hide)?;
 
     let (cols, rows) = terminal::size()?;
-    let mut app = App { 
-        stdout,
-        screen_text: vec![vec![' '; cols as usize]; rows as usize],
-        screen_color: vec![vec![Color::White; cols as usize]; rows as usize],
-        running: true,
-        start,
-        tab: 0,
-    };
+
+    let mut app = App::new(stdout, cols as usize, rows as usize, tasks);
 
     app.run()?;
 
@@ -50,7 +72,27 @@ fn main() -> Result<()> {
 }
 
 impl App {
+    fn new(stdout: Stdout, cols: usize, rows: usize, tasks: Vec<Task>) -> App {
+        return App { 
+            stdout,
+            screen_text: vec![vec![' '; cols]; rows],
+            screen_color: vec![vec![Color::White; cols]; rows],
+            running: true,
+            start: Instant::now(),
+            tab: 0,
+            tasks,
+            today: chrono::Local::now().date_naive()
+        };
+    }
+
     fn run(&mut self) -> Result<()> {
+        self.render_frame();
+        self.render_tabs();
+
+        self.render_string("▄▄              █  ▄▄   ▄▄▄     ▄▄     ", 60, 1);
+        self.render_string("█ █ █▀█ █▄▀ █▀█   ▀▄     █  █▀█ █ █ █▀█", 60, 2);
+        self.render_string("█▄▀ █▄█ █   █▄█▄  ▄▄▀    █  █▄█ █▄▀ █▄█", 60, 3);
+
         while self.running {
             self.render()?;
             self.handle_input()?;
@@ -81,10 +123,11 @@ impl App {
         self.clear_view();
         match self.tab {
             0 => {}, // self.render_something();
-            1 => {}, // self.render_something();
-            2 => self.render_calendar(),
+            1 => self.render_calendar(),
+            2 => {}, // self.render_something();
             _ => {}, // this will never happen
         }
+        self.render_tabs();
     }
 
     fn handle_input(&mut self) -> Result<()> {
@@ -106,6 +149,13 @@ impl App {
             }
         }
         return Ok(());
+    }
+
+    fn render_string(&mut self, string: &str, x: usize, y: usize) {
+        let mut chars = string.chars();
+        for i in 0..chars.clone().count() {
+            self.screen_text[y][x + i] = chars.next().expect("what that wasnt supposed to happen");
+        }
     }
 
     fn color_area(&mut self, color: Color, x_min: usize, y_min: usize, x_max: usize, y_max: usize) {
@@ -153,8 +203,17 @@ impl App {
             self.screen_text[i][X_MAX - 4] = '│';
         }
 
-        self.color_area(Color::DarkGrey, 2, 1, 50, 3);
+        self.render_string("Today", 8, 2);
+        self.render_string("This Week", 22, 2);
+        self.render_string("This Month", 37, 2);
+    }
 
+    fn render_tabs(&mut self) {
+        for i in 3..=50 {
+            self.screen_text[4][i] = '─';
+        }
+
+        self.color_area(Color::DarkGrey, 2, 1, 50, 3);
         match self.tab {
             0 => {
                 self.color_area(Color::White, 2, 1, 18, 3);
@@ -173,6 +232,7 @@ impl App {
                 for i in 19..34 {
                     self.screen_text[4][i] = ' ';
                 }
+                self.screen_text[4][2] = '╭';
                 self.screen_text[4][18] = '╯';
                 self.screen_text[4][34] = '╰';
             },
@@ -188,6 +248,22 @@ impl App {
             },
             _ => {}
         }
+    }
+
+    fn task_colors(&mut self) -> Vec<Color> {
+        let mut colors: Vec<Color> = Vec::new();
+        for task in self.tasks.clone() {
+            let mut color = match task.subject {
+                Subject::Film => Color::Rgb{ r: 127, g: 0, b: 0 },
+                Subject::Physics => Color::Rgb{ r: 192, g: 127, b: 0 },
+                Subject::Stats => Color::Rgb{ r: 0, g: 127, b: 127 },
+                Subject::APUSH => Color::Rgb{ r: 0, g: 127, b: 0 },
+                Subject::Compsci => Color::Rgb{ r: 0, g: 0, b: 127 },
+                Subject::Lang => Color::Rgb{ r: 127, g: 0, b: 127 },
+                Subject::None => Color::Grey,
+            };
+        }
+        return colors;
     }
 
     fn render_calendar(&mut self) {
@@ -208,13 +284,40 @@ impl App {
 
         const HORIZONTAL_SPACING: usize = 4;
         
-        for i in 1..7 {
-            let row = HORIZONTAL_SPACING * (i + 1) + 1;
+        for i in 2..=7 {
+            let row = HORIZONTAL_SPACING * (i) + 1;
             for j in 4..(X_MAX - 5) {
                 self.screen_text[row][j] = '─';
             }
             self.screen_text[row][3] = '├';
             self.screen_text[row][X_MAX - 5] = '┤';
+        }
+
+        const WEEKDAY_HIGHLIGHT: Color = Color::Rgb{r: 255, g: 180, b: 255 }; 
+        let y = match self.today.weekday(){
+            Weekday::Sun => 5,
+            Weekday::Mon => 9,
+            Weekday::Tue => 13,
+            Weekday::Wed => 17,
+            Weekday::Thu => 21,
+            Weekday::Fri => 25,
+            Weekday::Sat => 29,
+        };
+        self.color_area(WEEKDAY_HIGHLIGHT, 4, y, X_MAX - 6, y);
+        self.color_area(WEEKDAY_HIGHLIGHT, 4, y + 4, X_MAX - 6, y + 4);
+
+        for task in self.tasks.clone() {
+            if task.date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
+                let y = match task.date.weekday() {
+                    Weekday::Sun => 6,
+                    Weekday::Mon => 10,
+                    Weekday::Tue => 14,
+                    Weekday::Wed => 18,
+                    Weekday::Thu => 22,
+                    Weekday::Fri => 26,
+                    Weekday::Sat => 30,
+                };
+            }
         }
     }
 
@@ -262,13 +365,6 @@ impl App {
     }
 
     fn render(&mut self) -> Result<()> {
-        self.render_frame();
-        match self.tab {
-            0 => {},
-            1 => {},
-            2 => self.render_calendar(),
-            _ => {}
-        }
         self.draw()?;
 
         return Ok(());
