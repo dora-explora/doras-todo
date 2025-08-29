@@ -61,11 +61,11 @@ fn main() -> Result<()> {
     let mut stdout = stdout();
     let tasks = vec![
         Task::new(Subject::APUSH, "Unit 1 Chapter 1 Key Terms", 2025, 8, 24),
-        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 8, 25),
         Task::new(Subject::Lang, "Pages 4-6 & 10-12 Notes", 2025, 8, 26),
         Task::new(Subject::Physics, "Helioseismology Dimensional Analysis", 2025, 8, 27),
         Task::new(Subject::Stats, "Chapter 1 HW 1", 2025, 8, 28),
         Task::new(Subject::None, "Shabbat", 2025, 8, 29),
+        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 8, 29),
         Task::new(Subject::Film, "Finish PSA Script", 2025, 8, 30),
     ];
 

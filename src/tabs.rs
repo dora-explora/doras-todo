@@ -69,23 +69,63 @@ impl App {
         };
         self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 4 + width, y, X_MAX - 6, y);
 
+        let mut tasks_by_weekday: [Vec<Task>; 7] = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         for i in 0..self.tasks.len() {
             let task = self.tasks[i].clone();
             if task.date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
-                let y = match task.date.weekday() {
-                    Weekday::Sun => 7,
-                    Weekday::Mon => 11,
-                    Weekday::Tue => 15,
-                    Weekday::Wed => 19,
-                    Weekday::Thu => 23,
-                    Weekday::Fri => 27,
-                    Weekday::Sat => 31,
+                let weekday: usize = match task.date.weekday() {
+                    Weekday::Sun => 0,
+                    Weekday::Mon => 1,
+                    Weekday::Tue => 2,
+                    Weekday::Wed => 3,
+                    Weekday::Thu => 4,
+                    Weekday::Fri => 5,
+                    Weekday::Sat => 6,
                 };
-                self.render_string("██ ", 5, y);
-                self.render_string(&task.description, 8, y);
-                self.color_area(task_color(&task), 5, y, 6, y);
+                tasks_by_weekday[weekday].push(task);
             }
         }
+
+        for weekday in 0..6 {
+            let y = weekday * 4 + 7;
+            let tasks = &tasks_by_weekday[weekday];
+            if tasks.len() == 1 {
+                self.render_string("██ ", 5, y);
+                self.render_string(&tasks[0].description, 8, y);
+                self.color_area(task_color(&tasks[0]), 5, y, 6, y);  
+            } else if tasks.len() > 1 {
+                for i in 0..tasks.len() {
+                    if i == 0 {
+                        self.render_string("██ ", 5, y);
+                        self.render_string(&tasks[0].description, 8, y);
+                        self.color_area(task_color(&tasks[0]), 5, y, 6, y);
+                    } else {
+                        let mut x = 5;
+                        for j in 0..i {
+                            x += 6;
+                            x += tasks[j].description.len();
+                        }
+                        self.screen_text[y][x - 2] = '│';
+                        self.render_string("██ ", x, y);
+                        self.render_string(&tasks[i].description, x + 3, y);
+                        self.color_area(task_color(&tasks[i]), x, y, x + 1, y);
+                    }
+                }
+            }
+        }
+
+        // let y = match task.date.weekday() {
+        //     Weekday::Sun => 7,
+        //     Weekday::Mon => 11,
+        //     Weekday::Tue => 15,
+        //     Weekday::Wed => 19,
+        //     Weekday::Thu => 23,
+        //     Weekday::Fri => 27,
+        //     Weekday::Sat => 31,
+        // };
+        // self.render_string("██ ", 5, y);
+        // self.render_string(&task.description, 8, y);
+        // self.color_area(task_color(&task), 5, y, 6, y);
     }
 
     pub fn render_month_tab(&mut self) {
