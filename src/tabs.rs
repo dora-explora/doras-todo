@@ -1,6 +1,6 @@
 use crossterm::style::Color;
 use chrono::{Datelike, Weekday};
-use crate::{App, Task, Subject, X_MAX, Y_MAX};
+use crate::{App, Task, Subject};
 
 fn task_color(task: &Task) -> Color {
     let color: (u8, u8, u8) = match task.subject {
@@ -23,57 +23,59 @@ impl App {
     }
 
     pub fn render_week_tab(&mut self) {
-        self.screen_text[5][3] = '┌';
-        self.screen_text[5][X_MAX - 5] = '┐';
-        self.screen_text[Y_MAX - 3][3] = '└';
-        self.screen_text[Y_MAX - 3][X_MAX - 5] = '┘';
+        let vertical_spacing: usize = (self.height - 6) / 7;
+
+        self.screen_text[4][1] = '┌';
+        self.screen_text[4][self.width - 3] = '┐';
         
-        for i in 4..(X_MAX - 5) {
-            self.screen_text[5][i] = '─';
-            self.screen_text[Y_MAX - 3][i] = '─';
+        for i in 2..(self.width - 3) {
+            self.screen_text[4][i] = '─';
         }
 
-        for i in 6..(Y_MAX - 3) {
-            self.screen_text[i][3] = '│';
-            self.screen_text[i][X_MAX - 5] = '│';
+        for i in 5..(vertical_spacing * 7 + 4) {
+            self.screen_text[i][1] = '│';
+            self.screen_text[i][self.width - 3] = '│';
         }
-
-        const HORIZONTAL_SPACING: usize = 4;
         
-        for i in 2..=7 {
-            let row = HORIZONTAL_SPACING * (i) + 1;
-            for j in 4..(X_MAX - 5) {
+        for i in 1..7 {
+            let row = vertical_spacing * (i) + 4;
+            for j in 10..(self.width - 3) {
                 self.screen_text[row][j] = '─';
             }
-            self.screen_text[row][3] = '├';
-            self.screen_text[row][X_MAX - 5] = '┤';
-
+            self.screen_text[row][1] = '├';
+            self.screen_text[row][self.width - 3] = '┤';
         }
 
-        self.render_string(" Sunday ",    4, HORIZONTAL_SPACING * 1 + 1);
-        self.render_string(" Monday ",    4, HORIZONTAL_SPACING * 2 + 1);
-        self.render_string(" Tueday ",    4, HORIZONTAL_SPACING * 3 + 1);
-        self.render_string(" Wednesday ", 4, HORIZONTAL_SPACING * 4 + 1);
-        self.render_string(" Thursday ",  4, HORIZONTAL_SPACING * 5 + 1);
-        self.render_string(" Friday ",    4, HORIZONTAL_SPACING * 6 + 1);
-        self.render_string(" Saturday ",  4, HORIZONTAL_SPACING * 7 + 1);
+        for i in 2..(self.width - 3) {
+            self.screen_text[vertical_spacing * 7 + 4][i] = '─';
+        }
+        self.screen_text[vertical_spacing * 7 + 4][1] = '└';
+        self.screen_text[vertical_spacing * 7 + 4][self.width - 3] = '┘';
 
-        let (y, width) = match self.today.weekday(){
-            Weekday::Sun => (5, 8),
-            Weekday::Mon => (9, 8),
-            Weekday::Tue => (13, 8),
-            Weekday::Wed => (17, 11),
-            Weekday::Thu => (21, 10),
-            Weekday::Fri => (25, 8),
-            Weekday::Sat => (29, 10),
+        self.render_string(" Sunday ",    2, 4);
+        self.render_string(" Monday ",    2, vertical_spacing * 1 + 4);
+        self.render_string(" Tuesday ",    2, vertical_spacing * 2 + 4);
+        self.render_string(" Wednesday ", 2, vertical_spacing * 3 + 4);
+        self.render_string(" Thursday ",  2, vertical_spacing * 4 + 4);
+        self.render_string(" Friday ",    2, vertical_spacing * 5 + 4);
+        self.render_string(" Saturday ",  2, vertical_spacing * 6 + 4);
+
+        let (weekday, width) = match self.today.weekday(){
+            Weekday::Sun => (0, 8),
+            Weekday::Mon => (1, 8),
+            Weekday::Tue => (2, 8),
+            Weekday::Wed => (3, 11),
+            Weekday::Thu => (4, 10),
+            Weekday::Fri => (5, 8),
+            Weekday::Sat => (6, 10),
         };
-        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 4 + width, y, X_MAX - 6, y);
+        let y = weekday * vertical_spacing + 4;
+        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 2 + width, y, self.width - 4, y);
 
         let mut tasks_by_weekday: [Vec<Task>; 7] = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         for i in 0..self.tasks.len() {
-            let task = self.tasks[i].clone();
-            if task.date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
-                let weekday: usize = match task.date.weekday() {
+            if self.tasks[i].date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
+                let task_weekday = match self.tasks[i].date.weekday(){
                     Weekday::Sun => 0,
                     Weekday::Mon => 1,
                     Weekday::Tue => 2,
@@ -82,50 +84,50 @@ impl App {
                     Weekday::Fri => 5,
                     Weekday::Sat => 6,
                 };
-                tasks_by_weekday[weekday].push(task);
+                tasks_by_weekday[task_weekday].push(self.tasks[i].clone());
             }
         }
 
-        for weekday in 0..6 {
-            let y = weekday * 4 + 7;
+        for weekday in 0..7 {
+            let y = weekday * vertical_spacing + 4 + (vertical_spacing / 2);
             let tasks = &tasks_by_weekday[weekday];
             if tasks.len() == 1 {
-                self.render_string("██ ", 5, y);
-                self.render_string(&tasks[0].description, 8, y);
-                self.color_area(task_color(&tasks[0]), 5, y, 6, y);  
+                self.render_string("██ ", 3, y);
+                self.render_string(&tasks[0].description, 6, y);
+                self.color_area(task_color(&tasks[0]), 3, y, 4, y);  
             } else if tasks.len() > 1 {
+                let mut width = 0;
                 for i in 0..tasks.len() {
-                    if i == 0 {
-                        self.render_string("██ ", 5, y);
-                        self.render_string(&tasks[0].description, 8, y);
-                        self.color_area(task_color(&tasks[0]), 5, y, 6, y);
-                    } else {
-                        let mut x = 5;
-                        for j in 0..i {
-                            x += 6;
-                            x += tasks[j].description.len();
+                    width += 6;
+                    width += tasks[i].description.len();
+                }
+                width -= 3;
+                let mut minimized = 0;
+                while width > (self.width - 3) {
+                    width = 0;
+                    for i in 0..tasks.len() {
+                        width += 5;
+                        if i < (tasks.len() - minimized) {
+                            width += tasks[i].description.len() + 1;
                         }
-                        self.screen_text[y][x - 2] = '│';
-                        self.render_string("██ ", x, y);
-                        self.render_string(&tasks[i].description, x + 3, y);
-                        self.color_area(task_color(&tasks[i]), x, y, x + 1, y);
+                    }
+                    minimized += 1;
+                }
+                if minimized > 0 { minimized -= 1; }
+                let mut x = 3;
+                for i in 0..tasks.len() {
+                    self.screen_text[y][x - 2] = '│';
+                    self.render_string("██ ", x, y);
+                    self.color_area(task_color(&tasks[i]), x, y, x + 1, y);
+                    x += 5;
+                    
+                    if i < (tasks.len() - minimized) {
+                        self.render_string(&tasks[i].description, x - 2, y);
+                        x += tasks[i].description.len() + 1;
                     }
                 }
             }
         }
-
-        // let y = match task.date.weekday() {
-        //     Weekday::Sun => 7,
-        //     Weekday::Mon => 11,
-        //     Weekday::Tue => 15,
-        //     Weekday::Wed => 19,
-        //     Weekday::Thu => 23,
-        //     Weekday::Fri => 27,
-        //     Weekday::Sat => 31,
-        // };
-        // self.render_string("██ ", 5, y);
-        // self.render_string(&task.description, 8, y);
-        // self.color_area(task_color(&task), 5, y, 6, y);
     }
 
     pub fn render_month_tab(&mut self) {

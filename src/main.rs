@@ -1,6 +1,6 @@
 use crossterm::{
     cursor, 
-    event::{poll, read, Event::Key, KeyCode},
+    event::{poll, read, Event::Key, KeyCode, Event::Resize},
     style::{self, Color, Stylize},
     terminal::{self, BeginSynchronizedUpdate, Clear, EndSynchronizedUpdate}, 
     ExecutableCommand, QueueableCommand
@@ -13,9 +13,6 @@ use std::{
 mod tabs;
 
 const FRAMETIME: f64 = 1./12.;
-
-const X_MAX: usize = 105;
-const Y_MAX: usize = 36; 
 
 #[derive(Clone, Copy)]
 enum Subject {
@@ -53,6 +50,8 @@ struct App {
     start: Instant,
     tab: usize,
     tasks: Vec<Task>,
+    width: usize,
+    height: usize,
     today: NaiveDate
 }
 
@@ -62,19 +61,20 @@ fn main() -> Result<()> {
     let tasks = vec![
         Task::new(Subject::APUSH, "Unit 1 Chapter 1 Key Terms", 2025, 8, 24),
         Task::new(Subject::Lang, "Pages 4-6 & 10-12 Notes", 2025, 8, 26),
-        Task::new(Subject::Physics, "Helioseismology Dimensional Analysis", 2025, 8, 27),
+        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 8, 27),
         Task::new(Subject::Stats, "Chapter 1 HW 1", 2025, 8, 28),
         Task::new(Subject::None, "Shabbat", 2025, 8, 29),
-        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 8, 29),
+        Task::new(Subject::Physics, "Helioseismology Dimensional Analysis", 2025, 8, 29),
         Task::new(Subject::Film, "Finish PSA Script", 2025, 8, 30),
     ];
+    let (width, height) = terminal::size()?;
 
+    stdout.execute(terminal::EnterAlternateScreen)?;
     terminal::enable_raw_mode()?;
     stdout.execute(cursor::Hide)?;
+    stdout.execute(terminal::DisableLineWrap)?;
 
-    let (cols, rows) = terminal::size()?;
-
-    let mut app = App::new(stdout, cols as usize, rows as usize, tasks);
+    let mut app = App::new(stdout, tasks, width as usize, height as usize);
 
     app.run()?;
 
@@ -84,15 +84,17 @@ fn main() -> Result<()> {
 }
 
 impl App {
-    fn new(stdout: Stdout, cols: usize, rows: usize, tasks: Vec<Task>) -> App {
+    fn new(stdout: Stdout, tasks: Vec<Task>, width: usize, height: usize) -> App {
         return App { 
             stdout,
-            screen_text: vec![vec![' '; cols]; rows],
-            screen_color: vec![vec![Color::White; cols]; rows],
+            screen_text: vec![vec![' '; width]; height],
+            screen_color: vec![vec![Color::White; width]; height],
             running: true,
             start: Instant::now(),
             tab: 0,
             tasks,
+            width,
+            height,
             today: chrono::Local::now().date_naive()
         };
     }
@@ -102,7 +104,7 @@ impl App {
         self.render_tabs();
 
         while self.running {
-            self.render()?;
+            self.draw()?;
             self.handle_input()?;
         }
         return Ok(());
@@ -111,13 +113,13 @@ impl App {
     fn exit(&mut self) -> Result<()> {
         self.running = false;
         self.stdout.execute(Clear(terminal::ClearType::All))?;
-        self.stdout.execute(cursor::MoveTo(0, 0))?;
+        self.stdout.execute(terminal::LeaveAlternateScreen)?;
         return Ok(());
     }
 
     fn clear_tab(&mut self) {
-        for i in 3..(X_MAX - 4) {
-            for j in 5..(Y_MAX - 2) {
+        for i in 1..(self.width - 2) {
+            for j in 4..(self.height - 1) {
                 self.screen_text[j][i] = ' ';
                 self.screen_color[j][i] = Color::White;
             }
@@ -147,18 +149,33 @@ impl App {
                         KeyCode::Char('q') => self.exit()?,
                         KeyCode::Tab => self.switch_tab(false),
                         KeyCode::BackTab => self.switch_tab(true),
-                        // KeyCode::Right => if self.cursor.0 < X_MAX { self.cursor.0 += 1 },
+                        // KeyCode::Right => if self.cursor.0 < self.width { self.cursor.0 += 1 },
                         // KeyCode::Left => if self.cursor.0 > 0 { self.cursor.0 -= 1 },
-                        // KeyCode::Down => if self.cursor.1 < Y_MAX { self.cursor.1 += 1 },
+                        // KeyCode::Down => if self.cursor.1 < self.height { self.cursor.1 += 1 },
                         // KeyCode::Up => if self.cursor.1 > 0 { self.cursor.1 -= 1 },
                         _ => {}
                     },
+
+                    Resize(width, height) => self.resize(width as usize, height as usize),
                     
                     _ => {}
                 }
             }
         }
         return Ok(());
+    }
+
+    fn resize(&mut self, new_width: usize, new_height: usize) {
+        if new_height > self.height {
+            self.screen_text.resize(new_height, vec![' '; new_width]);
+        }
+        if new_width > self.width {
+            for row in &mut self.screen_text {
+                row.resize(new_width, ' ');
+            }
+        }
+
+        self.render_frame();
     }
 
     fn render_string(&mut self, string: &str, x: usize, y: usize) {
@@ -177,101 +194,100 @@ impl App {
     }
 
     fn render_frame(&mut self) {
-        self.screen_text[1][2] = '╭';
-        self.screen_text[2][2] = '│';
-        self.screen_text[3][2] = '│';
+        self.screen_text[0][0] = '╭';
+        self.screen_text[1][0] = '│';
+        self.screen_text[2][0] = '│';
 
-        self.screen_text[2][14] = '│';
-        self.screen_text[3][14] = '│';
+        self.screen_text[1][12] = '│';
+        self.screen_text[2][12] = '│';
 
-        self.screen_text[2][26] = '│';
-        self.screen_text[3][26] = '│';
+        self.screen_text[1][24] = '│';
+        self.screen_text[2][24] = '│';
 
-        self.screen_text[2][39] = '│';
-        self.screen_text[3][39] = '│';
+        self.screen_text[1][37] = '│';
+        self.screen_text[2][37] = '│';
 
-        self.screen_text[1][52] = '╮';
-        self.screen_text[2][52] = '│';
-        self.screen_text[3][52] = '│';
+        self.screen_text[0][50] = '╮';
+        self.screen_text[1][50] = '│';
+        self.screen_text[2][50] = '│';
 
-        self.screen_text[4][2] = '╭';
-        self.screen_text[4][X_MAX - 4] = '╮';
-        self.screen_text[Y_MAX - 2][2] = '╰';
-        self.screen_text[Y_MAX - 2][X_MAX - 4] = '╯';
+        self.screen_text[3][0] = '╭';
+        self.screen_text[3][self.width - 2] = '╮';
+        self.screen_text[self.height - 1][0] = '╰';
+        self.screen_text[self.height - 1][self.width - 2] = '╯';
 
-        for i in 3..(X_MAX - 4) {
-            self.screen_text[Y_MAX - 2][i] = '─';
-            self.screen_text[4][i] = '─';
+        for i in 1..(self.width - 2) {
+            self.screen_text[3][i] = '─';
+            self.screen_text[self.height - 1][i] = '─';
         }
 
-        for i in 5..(Y_MAX - 2) {
-            self.screen_text[i][2] = '│';
+        for i in 4..(self.height - 1) {
+            self.screen_text[i][0] = '│';
+            self.screen_text[i][self.width - 2] = '│';
         }
 
-        for i in 5..(Y_MAX - 2) {
-            self.screen_text[i][X_MAX - 4] = '│';
+        self.render_string("Today", 4, 1);
+        self.render_string("This Week", 14, 1);
+        self.render_string("This Month", 26, 1);
+        self.render_string("Add Task", 40, 1);
+
+        if self.height > 90 {
+            self.render_string("▄▄              ▄  ▄▄   ▄▄▄     ▄▄     ", self.width - 40, 0);
+            self.render_string("█ █ █▀█ █▄▀ ▄▀█ ▀ ▀▄     █  █▀█ █ █ █▀█", self.width - 40, 1);
+            self.render_string("█▄▀ █▄█ █   ▀▄█   ▄▄▀    █  █▄█ █▄▀ █▄█", self.width - 40, 2);
         }
-
-        self.render_string("Today", 6, 2);
-        self.render_string("This Week", 16, 2);
-        self.render_string("This Month", 28, 2);
-        self.render_string("Add Task", 42, 2);
-
-        self.render_string("▄▄              ▄  ▄▄   ▄▄▄     ▄▄     ",59, 1);
-        self.render_string("█ █ █▀█ █▄▀ ▄▀█ ▀ ▀▄     █  █▀█ █ █ █▀█",59, 2);
-        self.render_string("█▄▀ █▄█ █   ▀▄█   ▄▄▀    █  █▄█ █▄▀ █▄█",59, 3);
     }
 
     fn render_tabs(&mut self) {
-        for i in 3..52 {
-            self.screen_text[1][i] = '─';
-            self.screen_text[4][i] = '─';
+        for i in 1..50 {
+            self.screen_text[0][i] = '─';
+            self.screen_text[3][i] = '─';
         }
+        self.screen_text[3][50] = '─';
 
-        self.screen_text[4][2] = '╭';
-        self.screen_text[1][14] = '┬';
-        self.screen_text[1][26] = '┬';
-        self.screen_text[1][39] = '┬';
+        self.screen_text[3][0] = '╭';
+        self.screen_text[0][12] = '┬';
+        self.screen_text[0][24] = '┬';
+        self.screen_text[0][37] = '┬';
 
-        self.color_area(Color::DarkGrey, 2, 1, 52, 3);
+        self.color_area(Color::DarkGrey, 0, 0, 50, 2);
         match self.tab {
             0 => {
-                self.color_area(Color::White, 2, 1, 14, 3);
-                self.screen_text[1][14] = '╮';
-                for i in 3..14 {
-                    self.screen_text[4][i] = ' ';
+                self.color_area(Color::White, 0, 0, 12, 2);
+                self.screen_text[0][12] = '╮';
+                for i in 1..12 {
+                    self.screen_text[3][i] = ' ';
                 }
-                self.screen_text[4][2] = '│';
-                self.screen_text[4][14] = '╰';
-                self.screen_text[4][52] = '─';
+                self.screen_text[3][0] = '│';
+                self.screen_text[3][12] = '╰';
             },
             1 => { 
-                self.color_area(Color::White, 14, 1, 26, 3);
-                self.screen_text[1][14] = '╭';
-                self.screen_text[1][26] = '╮';
-                self.screen_text[4][14] = '╯';
-                self.screen_text[4][26] = '╰';
-                for i in 15..26 {
-                    self.screen_text[4][i] = ' ';
+                self.color_area(Color::White, 12, 0, 24, 2);
+                self.screen_text[0][12] = '╭';
+                self.screen_text[0][24] = '╮';
+                self.screen_text[3][12] = '╯';
+                self.screen_text[3][24] = '╰';
+                for i in 13..24 {
+                    self.screen_text[3][i] = ' ';
                 }
             },
             2 => { 
-                self.color_area(Color::White, 26, 1, 39, 3);
-                self.screen_text[1][26] = '╭';
-                self.screen_text[1][39] = '╮';
-                self.screen_text[4][26] = '╯';
-                self.screen_text[4][39] = '╰';
-                for i in 27..39 {
-                    self.screen_text[4][i] = ' ';
+                self.color_area(Color::White, 24, 0, 37, 2);
+                self.screen_text[0][24] = '╭';
+                self.screen_text[0][37] = '╮';
+                self.screen_text[3][24] = '╯';
+                self.screen_text[3][37] = '╰';
+                for i in 25..37 {
+                    self.screen_text[3][i] = ' ';
                 }
             },
             3 => { 
-                self.color_area(Color::White, 39, 1, 52, 3);
-                self.screen_text[1][39] = '╭';
-                self.screen_text[4][39] = '╯';
-                self.screen_text[4][52] = '╰';
-                for i in 40..52 {
-                    self.screen_text[4][i] = ' ';
+                self.color_area(Color::White, 37, 0, 50, 2);
+                self.screen_text[0][37] = '╭';
+                self.screen_text[3][37] = '╯';
+                self.screen_text[3][50] = '╰';
+                for i in 38..50 {
+                    self.screen_text[3][i] = ' ';
                 }
             },
             _ => {}
@@ -280,11 +296,11 @@ impl App {
 
     fn draw(&mut self) -> Result<()> {
         self.stdout.execute(BeginSynchronizedUpdate)?;
-        self.stdout.queue(Clear(terminal::ClearType::All))?;
+        self.stdout.queue(Clear(terminal::ClearType::Purge))?;
         self.stdout.queue(cursor::MoveTo(0, 0))?;
 
-        for y in 0..Y_MAX {
-            for x in 0..X_MAX {
+        for y in 0..self.height {
+            for x in 0..self.width {
                 let intensity = (
 	    			(8. * 
                         f64::sin(
@@ -295,34 +311,15 @@ impl App {
                     + 30
                 ) as u8;
 
-                let color = if y == 0 || y == Y_MAX - 1 || x == 0 || x == 1 || x == X_MAX - 1 || x == X_MAX - 2 {
-                    style::Color::Rgb {
-                        r: intensity + 30, 
-                        g: 40,
-                        b: intensity + 30,
-                    }
-                } else {
-                    style::Color::Rgb {
-                        r: intensity, 
-                        g: 0,
-                        b: intensity,
-                    }
-                };
-
                 self.stdout.queue(style::PrintStyledContent(
-                    self.screen_text[y as usize][x as usize]
-                    .with(self.screen_color[y as usize][x as usize])
-                    .on(color)
+                    self.screen_text[y][x]
+                    .with(self.screen_color[y][x])
+                    .on(style::Color::Rgb{r: intensity, g: 0, b: intensity})
                 ))?;
             }
+            self.stdout.execute(cursor::MoveToNextLine(1))?;
         }
         self.stdout.execute(EndSynchronizedUpdate)?;
-        return Ok(());
-    }
-
-    fn render(&mut self) -> Result<()> {
-        self.draw()?;
-
         return Ok(());
     }
 }
