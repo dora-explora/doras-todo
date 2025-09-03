@@ -1,5 +1,5 @@
 use crossterm::style::Color;
-use chrono::{Datelike, Weekday};
+use chrono::{Datelike, Days, Weekday};
 use crate::{App, Task, Subject};
 
 fn task_color(task: &Task) -> Color {
@@ -23,42 +23,23 @@ impl App {
     }
 
     pub fn render_week_tab(&mut self) {
-        let vertical_spacing: usize = (self.height - 6) / 7;
-
-        self.screen_text[4][1] = '┌';
-        self.screen_text[4][self.width - 3] = '┐';
+        let vertical_spacing: usize = (self.height - 5) / 7;
         
-        for i in 2..(self.width - 3) {
-            self.screen_text[4][i] = '─';
-        }
-
-        for i in 5..(vertical_spacing * 7 + 4) {
-            self.screen_text[i][1] = '│';
-            self.screen_text[i][self.width - 3] = '│';
-        }
-        
-        for i in 1..7 {
+        for i in 0..7 {
             let row = vertical_spacing * (i) + 4;
-            for j in 10..(self.width - 3) {
+            for j in 9..(self.width - 3) {
                 self.screen_text[row][j] = '─';
             }
-            self.screen_text[row][1] = '├';
             self.screen_text[row][self.width - 3] = '┤';
         }
 
-        for i in 2..(self.width - 3) {
-            self.screen_text[vertical_spacing * 7 + 4][i] = '─';
-        }
-        self.screen_text[vertical_spacing * 7 + 4][1] = '└';
-        self.screen_text[vertical_spacing * 7 + 4][self.width - 3] = '┘';
-
-        self.render_string(" Sunday ",    2, 4);
-        self.render_string(" Monday ",    2, vertical_spacing * 1 + 4);
-        self.render_string(" Tuesday ",    2, vertical_spacing * 2 + 4);
-        self.render_string(" Wednesday ", 2, vertical_spacing * 3 + 4);
-        self.render_string(" Thursday ",  2, vertical_spacing * 4 + 4);
-        self.render_string(" Friday ",    2, vertical_spacing * 5 + 4);
-        self.render_string(" Saturday ",  2, vertical_spacing * 6 + 4);
+        self.render_string(" Sunday ",    1, 4);
+        self.render_string(" Monday ",    1, vertical_spacing * 1 + 4);
+        self.render_string(" Tuesday ",   1, vertical_spacing * 2 + 4);
+        self.render_string(" Wednesday ", 1, vertical_spacing * 3 + 4);
+        self.render_string(" Thursday ",  1, vertical_spacing * 4 + 4);
+        self.render_string(" Friday ",    1, vertical_spacing * 5 + 4);
+        self.render_string(" Saturday ",  1, vertical_spacing * 6 + 4);
 
         let (weekday, width) = match self.today.weekday(){
             Weekday::Sun => (0, 8),
@@ -70,12 +51,12 @@ impl App {
             Weekday::Sat => (6, 10),
         };
         let y = weekday * vertical_spacing + 4;
-        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 2 + width, y, self.width - 4, y);
+        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 2 + width, y, self.width - 3, y);
 
         let mut tasks_by_weekday: [Vec<Task>; 7] = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-        for i in 0..self.tasks.len() {
-            if self.tasks[i].date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
-                let task_weekday = match self.tasks[i].date.weekday(){
+        for task in &self.tasks {
+            if task.date.week(Weekday::Sun) == self.today.week(Weekday::Sun) {
+                let task_weekday = match task.date.weekday(){
                     Weekday::Sun => 0,
                     Weekday::Mon => 1,
                     Weekday::Tue => 2,
@@ -84,7 +65,7 @@ impl App {
                     Weekday::Fri => 5,
                     Weekday::Sat => 6,
                 };
-                tasks_by_weekday[task_weekday].push(self.tasks[i].clone());
+                tasks_by_weekday[task_weekday].push(task.clone());
             }
         }
 
@@ -131,7 +112,57 @@ impl App {
     }
 
     pub fn render_month_tab(&mut self) {
-        
+        let horizontal_spacing = (self.width - 3) / 7;
+        let vertical_spacing = (self.height - 5) / 6;
+
+        self.screen_text[4][1] = '┌';
+        self.screen_text[4][self.width - 3] = '┐';
+        self.screen_text[self.height - 2][1] = '└';
+        self.screen_text[self.height - 2][self.width - 3] = '┘';
+
+        for i in 2..(self.width - 3) {
+            self.screen_text[4][i] = '─';
+            self.screen_text[self.height - 2][i] = '─';
+        }
+
+        for i in 5..(self.height - 2) {
+            self.screen_text[i][1] = '│';
+            self.screen_text[i][self.width - 3] = '│';
+        }
+
+        for i in 1..7 {
+            let column = horizontal_spacing * i + 1;
+            self.screen_text[4][column] = '┬';
+            for j in 5..(self.height - 2) {
+                self.screen_text[j][column] = '│';
+            }
+            self.screen_text[self.height - 2][column] = '┴';
+        }
+
+        for i in 1..6 {
+            let row = vertical_spacing * i + 4;
+            self.screen_text[row][1] = '├';
+            for j in 2..(self.width - 3) {
+                if j % horizontal_spacing == 1 {
+                    self.screen_text[row][j] = '┼';
+                } else {
+                    self.screen_text[row][j] = '─';
+                }
+            }
+            self.screen_text[row][self.width - 3] = '┤';
+        }
+
+        let mut min_week = self.today.week(Weekday::Sun);
+        while min_week.last_day().month() == self.today.month() {
+            min_week = min_week.first_day().checked_sub_days(Days::new(7)).expect("date error???").week(Weekday::Sun); // this is just min_week--;
+        }
+        min_week = min_week.first_day().checked_add_days(Days::new(7)).expect("date error???").week(Weekday::Sun); // min_week++;
+        let max_week = min_week.first_day().checked_add_days(Days::new(35)).expect("date error???").week(Weekday::Sun); // max_week = min_week + 5;
+        for task in &self.tasks {
+            if task.date >= min_week.first_day() && task.date <= max_week.last_day() {
+                
+            }
+        }
     }
 
     pub fn render_entry_tab(&mut self) {
