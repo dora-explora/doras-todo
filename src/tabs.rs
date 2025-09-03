@@ -51,7 +51,7 @@ impl App {
             Weekday::Sat => (6, 10),
         };
         let y = weekday * vertical_spacing + 4;
-        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 2 + width, y, self.width - 3, y);
+        self.color_area(Color::Rgb{r: 255, g: 200, b: 50 }, 1 + width, y, self.width - 3, y);
 
         let mut tasks_by_weekday: [Vec<Task>; 7] = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         for task in &self.tasks {
@@ -73,9 +73,9 @@ impl App {
             let y = weekday * vertical_spacing + 4 + (vertical_spacing / 2);
             let tasks = &tasks_by_weekday[weekday];
             if tasks.len() == 1 {
-                self.render_string("██ ", 3, y);
-                self.render_string(&tasks[0].description, 6, y);
-                self.color_area(task_color(&tasks[0]), 3, y, 4, y);  
+                self.render_string("██ ", 2, y);
+                self.render_string(&tasks[0].description, 5, y);
+                self.color_area(task_color(&tasks[0]), 2, y, 3, y);  
             } else if tasks.len() > 1 {
                 let mut width = 0;
                 for i in 0..tasks.len() {
@@ -95,7 +95,7 @@ impl App {
                     minimized += 1;
                 }
                 if minimized > 0 { minimized -= 1; }
-                let mut x = 3;
+                let mut x = 2;
                 for i in 0..tasks.len() {
                     self.screen_text[y][x - 2] = '│';
                     self.render_string("██ ", x, y);
@@ -112,44 +112,46 @@ impl App {
     }
 
     pub fn render_month_tab(&mut self) {
-        let horizontal_spacing = (self.width - 3) / 7;
-        let vertical_spacing = (self.height - 5) / 6;
+        let horizontal_spacing = (self.width - 4) / 7;
+        let vertical_spacing = (self.height - 6) / 6;
+        let right = horizontal_spacing * 7 + 1;
+        let bottom = vertical_spacing * 6 + 4;
 
         self.screen_text[4][1] = '┌';
-        self.screen_text[4][self.width - 3] = '┐';
-        self.screen_text[self.height - 2][1] = '└';
-        self.screen_text[self.height - 2][self.width - 3] = '┘';
+        self.screen_text[4][right] = '┐';
+        self.screen_text[bottom][1] = '└';
+        self.screen_text[bottom][right] = '┘';
 
-        for i in 2..(self.width - 3) {
+        for i in 2..right {
             self.screen_text[4][i] = '─';
-            self.screen_text[self.height - 2][i] = '─';
+            self.screen_text[bottom][i] = '─';
         }
 
-        for i in 5..(self.height - 2) {
+        for i in 5..bottom {
             self.screen_text[i][1] = '│';
-            self.screen_text[i][self.width - 3] = '│';
+            self.screen_text[i][right] = '│';
         }
 
         for i in 1..7 {
             let column = horizontal_spacing * i + 1;
             self.screen_text[4][column] = '┬';
-            for j in 5..(self.height - 2) {
+            for j in 5..bottom {
                 self.screen_text[j][column] = '│';
             }
-            self.screen_text[self.height - 2][column] = '┴';
+            self.screen_text[bottom][column] = '┴';
         }
 
         for i in 1..6 {
             let row = vertical_spacing * i + 4;
             self.screen_text[row][1] = '├';
-            for j in 2..(self.width - 3) {
+            for j in 2..right {
                 if j % horizontal_spacing == 1 {
                     self.screen_text[row][j] = '┼';
                 } else {
                     self.screen_text[row][j] = '─';
                 }
             }
-            self.screen_text[row][self.width - 3] = '┤';
+            self.screen_text[row][right] = '┤';
         }
 
         let mut min_week = self.today.week(Weekday::Sun);
@@ -162,6 +164,52 @@ impl App {
             if task.date >= min_week.first_day() && task.date <= max_week.last_day() {
                 
             }
+        }
+
+        let mut first_day = min_week.first_day();
+        let mut day_offset = 0;
+        while first_day.day() != 1 {
+            first_day = first_day.checked_add_days(Days::new(1)).unwrap();
+            day_offset += 1;
+        }
+
+        for i in 0..self.today.num_days_in_month() as usize {
+            self.render_string(
+                format!("{}", i + 1).as_str(), 
+                3 + horizontal_spacing * ((i + day_offset) % 7), 
+                4 + vertical_spacing *   ((i + day_offset) / 7)
+            );
+        }
+
+        if day_offset > 0 {
+            for i in 0..day_offset {
+                self.render_string(
+                    format!("{}", 
+                        min_week.first_day().num_days_in_month() as usize + i - day_offset + 1
+                    ).as_str(), 
+                    3 + horizontal_spacing * (i % 7), 
+                    4 + vertical_spacing   * (i / 7)
+                );
+                self.screen_text[4 + vertical_spacing][i * horizontal_spacing + 1] = '┬';
+            }
+            
+            self.screen_text[4 + vertical_spacing][1] = '┌';
+            self.screen_text[4][day_offset * horizontal_spacing + 1] = '┌';
+            self.color_area(Color::DarkGrey, 
+                1, 
+                4, 
+                day_offset * horizontal_spacing, 
+                vertical_spacing + 3
+            )
+        }
+
+        let last_day = day_offset + min_week.last_day().num_days_in_month() as usize;
+        for i in last_day..42 {
+            self.render_string(
+                format!("{}", i - last_day + 1).as_str(), 
+                3 + horizontal_spacing * (i % 7), 
+                4 + vertical_spacing   * (i / 7)
+            );
         }
     }
 

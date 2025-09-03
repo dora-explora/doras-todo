@@ -59,13 +59,9 @@ struct App {
 fn main() -> Result<()> {
     let mut stdout = stdout();
     let tasks = vec![
-        Task::new(Subject::APUSH, "Unit 1 Chapter 1 Key Terms", 2025, 9, 24),
-        Task::new(Subject::Lang, "Pages 4-6 & 10-12 Notes", 2025, 9, 26),
-        Task::new(Subject::Compsci, "Credit Card Verifier", 2025, 9, 27),
-        Task::new(Subject::Stats, "Chapter 1 HW 1", 2025, 9, 28),
-        Task::new(Subject::None, "Shabbat", 2025, 9, 29),
-        Task::new(Subject::Physics, "Helioseismology Dimensional Analysis", 2025, 9, 29),
-        Task::new(Subject::Film, "Finish PSA Script", 2025, 9, 30),
+        Task::new(Subject::Film, "Finish PSA Script", 2025, 9, 3),
+        Task::new(Subject::Stats, "Homework 2", 2025, 9, 4),
+        Task::new(Subject::APUSH, "AMSCO MCQs + SAQ Pg. 22", 2025, 9, 4),
     ];
     let (width, height) = terminal::size()?;
 
@@ -75,7 +71,7 @@ fn main() -> Result<()> {
     stdout.execute(terminal::DisableLineWrap)?;
 
     let mut app = App::new(stdout, tasks, width as usize, height as usize);
-
+    // app.today = NaiveDate::from_ymd_opt(2025, 10, 1).unwrap();
     app.run()?;
 
     terminal::disable_raw_mode()?;
@@ -146,7 +142,7 @@ impl App {
             if poll(Duration::from_secs_f64(FRAMETIME - (self.start.elapsed().as_secs_f64() % FRAMETIME)))? {
                 match read()? {
                     Key(key) => match key.code {
-                        KeyCode::Char('q') => self.exit()?,
+                        KeyCode::Char('q') | KeyCode::Char('Q') => self.exit()?,
                         KeyCode::Tab => self.switch_tab(false),
                         KeyCode::BackTab => self.switch_tab(true),
                         // KeyCode::Right => if self.cursor.0 < self.width { self.cursor.0 += 1 },
