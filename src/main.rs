@@ -59,7 +59,6 @@ struct App {
 fn main() -> Result<()> {
     let mut stdout = stdout();
     let tasks = vec![
-        Task::new(Subject::Film, "Finish PSA Script", 2025, 9, 3),
         Task::new(Subject::Stats, "Homework 2", 2025, 9, 4),
         Task::new(Subject::APUSH, "AMSCO MCQs + SAQ Pg. 22", 2025, 9, 4),
     ];
@@ -189,6 +188,10 @@ impl App {
         }
     }
 
+    fn dim_area(&mut self, x_min: usize, y_min: usize, x_max: usize, y_max: usize) {
+        self.color_area(Color::DarkGrey, x_min, y_min, x_max, y_max);
+    }
+
     fn render_frame(&mut self) {
         self.screen_text[0][0] = '╭';
         self.screen_text[1][0] = '│';
@@ -246,7 +249,7 @@ impl App {
         self.screen_text[0][24] = '┬';
         self.screen_text[0][37] = '┬';
 
-        self.color_area(Color::DarkGrey, 0, 0, 50, 2);
+        self.dim_area(0, 0, 50, 2);
         match self.tab {
             0 => {
                 self.color_area(Color::White, 0, 0, 12, 2);

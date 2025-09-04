@@ -195,7 +195,7 @@ impl App {
             
             self.screen_text[4 + vertical_spacing][1] = '┌';
             self.screen_text[4][day_offset * horizontal_spacing + 1] = '┌';
-            self.color_area(Color::DarkGrey, 
+            self.dim_area(
                 1, 
                 4, 
                 day_offset * horizontal_spacing, 
@@ -210,6 +210,34 @@ impl App {
                 3 + horizontal_spacing * (i % 7), 
                 4 + vertical_spacing   * (i / 7)
             );
+            self.dim_area(
+                3 + horizontal_spacing * (i % 7), 
+                4 + vertical_spacing   * (i / 7), 
+                3 + horizontal_spacing * (i % 7) + ((i - last_day + 1) / 10), 
+                4 + vertical_spacing   * (i / 7) + 1
+            );
+        }
+        if last_day < 35 {
+            self.dim_area(1, bottom - vertical_spacing + 1, right, bottom);
+            self.screen_text[bottom - vertical_spacing][1] = '└';
+            self.screen_text[bottom - vertical_spacing][(last_day % 7) * horizontal_spacing + 1] = '┘';
+            for i in 1..(last_day % 7) {
+                self.screen_text[bottom - vertical_spacing][horizontal_spacing * i + 1] = '┴';
+            }
+            for i in (last_day % 7 + 1)..7 {
+                self.screen_text[bottom - vertical_spacing * 2][horizontal_spacing * i + 1] = '┴';
+            }
+            self.screen_text[bottom - vertical_spacing * 2][right] = '┘';
+            self.dim_area(
+                2 + horizontal_spacing * (last_day % 7), 
+                5 + vertical_spacing * 4, 
+                right, 
+                5 + vertical_spacing * 5
+            );
+        } else {
+            for i in (last_day % 7 + 1)..7 {
+                self.screen_text[bottom - vertical_spacing][horizontal_spacing * i + 1] = '┴';
+            }
         }
     }
 
