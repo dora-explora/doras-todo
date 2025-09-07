@@ -112,10 +112,27 @@ impl App {
     }
 
     pub fn render_month_tab(&mut self) {
+        let mut min_week = self.today.week(Weekday::Sun);
+        while min_week.last_day().month() == self.today.month() {
+            min_week = min_week.first_day().checked_sub_days(Days::new(7)).expect("date error?").week(Weekday::Sun); // this is just min_week--;
+        }
+        min_week = min_week.first_day().checked_add_days(Days::new(7)).expect("date error??").week(Weekday::Sun); // min_week++;
+
+        let mut first_day = min_week.first_day();
+        let mut day_offset = 0;
+        while first_day.day() != 1 {
+            first_day = first_day.checked_add_days(Days::new(1)).unwrap();
+            day_offset += 1;
+        }
+        let last_day = day_offset + min_week.last_day().num_days_in_month() as usize;
+        let reduced = last_day <= 35;
+        let max_week = min_week.first_day().checked_add_days(Days::new(if reduced {28} else {35})).expect("date error???").week(Weekday::Sun); // max_week = min_week + 4 or 5
+
         let horizontal_spacing = (self.width - 4) / 7;
-        let vertical_spacing = (self.height - 6) / 6;
+        let rows = if reduced {5} else {6};
+        let vertical_spacing = (self.height - 6) / rows;
         let right = horizontal_spacing * 7 + 1;
-        let bottom = vertical_spacing * 6 + 4;
+        let bottom = vertical_spacing * rows + 4;
 
         self.screen_text[4][1] = '┌';
         self.screen_text[4][right] = '┐';
@@ -141,7 +158,7 @@ impl App {
             self.screen_text[bottom][column] = '┴';
         }
 
-        for i in 1..6 {
+        for i in 1..rows {
             let row = vertical_spacing * i + 4;
             self.screen_text[row][1] = '├';
             for j in 2..right {
@@ -154,23 +171,14 @@ impl App {
             self.screen_text[row][right] = '┤';
         }
 
-        let mut min_week = self.today.week(Weekday::Sun);
-        while min_week.last_day().month() == self.today.month() {
-            min_week = min_week.first_day().checked_sub_days(Days::new(7)).expect("date error???").week(Weekday::Sun); // this is just min_week--;
-        }
-        min_week = min_week.first_day().checked_add_days(Days::new(7)).expect("date error???").week(Weekday::Sun); // min_week++;
-        let max_week = min_week.first_day().checked_add_days(Days::new(35)).expect("date error???").week(Weekday::Sun); // max_week = min_week + 5;
-        for task in &self.tasks {
+        for i in 0..self.tasks.len() {
+            let task = &self.tasks[i];
             if task.date >= min_week.first_day() && task.date <= max_week.last_day() {
-                
+                let mut row = 0;
+                while task.date >= min_week.last_day().checked_add_days(Days::new(7 * row)).expect("date error????") {
+                    row += 1;
+                }
             }
-        }
-
-        let mut first_day = min_week.first_day();
-        let mut day_offset = 0;
-        while first_day.day() != 1 {
-            first_day = first_day.checked_add_days(Days::new(1)).unwrap();
-            day_offset += 1;
         }
 
         for i in 0..self.today.num_days_in_month() as usize {
@@ -203,41 +211,56 @@ impl App {
             )
         }
 
-        let last_day = day_offset + min_week.last_day().num_days_in_month() as usize;
-        for i in last_day..42 {
-            self.render_string(
-                format!("{}", i - last_day + 1).as_str(), 
-                3 + horizontal_spacing * (i % 7), 
-                4 + vertical_spacing   * (i / 7)
-            );
-            self.dim_area(
-                3 + horizontal_spacing * (i % 7), 
-                4 + vertical_spacing   * (i / 7), 
-                3 + horizontal_spacing * (i % 7) + ((i - last_day + 1) / 10), 
-                4 + vertical_spacing   * (i / 7) + 1
-            );
-        }
-        if last_day < 35 {
-            self.dim_area(1, bottom - vertical_spacing + 1, right, bottom);
-            self.screen_text[bottom - vertical_spacing][1] = '└';
-            self.screen_text[bottom - vertical_spacing][(last_day % 7) * horizontal_spacing + 1] = '┘';
-            for i in 1..(last_day % 7) {
+        if reduced && last_day != 35{
+            for i in (last_day % 7 + 1)..7 {
                 self.screen_text[bottom - vertical_spacing][horizontal_spacing * i + 1] = '┴';
             }
-            for i in (last_day % 7 + 1)..7 {
-                self.screen_text[bottom - vertical_spacing * 2][horizontal_spacing * i + 1] = '┴';
+            for i in last_day..35 {
+                self.render_string(
+                    format!("{}", i - last_day + 1).as_str(), 
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing
+                );
+                self.dim_area(
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing, 
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing + 1
+                );
             }
-            self.screen_text[bottom - vertical_spacing * 2][right] = '┘';
+            self.dim_area(
+                2 + horizontal_spacing * (last_day % 7),
+                5 + vertical_spacing   * 4,
+                right,
+                5 + vertical_spacing   * 5
+            );
+            self.screen_text[bottom][1 + horizontal_spacing * (last_day % 7)] = '┘';
+            self.screen_text[4 + vertical_spacing * 4][right] = '┘';
+        } else if !reduced {
+            for i in (last_day % 7 + 1)..7 {
+                self.screen_text[bottom - vertical_spacing][horizontal_spacing * i + 1] = '┴';
+            }
+            for i in last_day..42 {
+                self.render_string(
+                    format!("{}", i - last_day + 1).as_str(), 
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing
+                );
+                self.dim_area(
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing, 
+                    3 + horizontal_spacing * (i % 7), 
+                    bottom - vertical_spacing + 1
+                );
+            }
+            self.screen_text[bottom - vertical_spacing][right] = '┘';
+            self.screen_text[bottom][(last_day % 7) * horizontal_spacing + 1] = '┘';
             self.dim_area(
                 2 + horizontal_spacing * (last_day % 7), 
-                5 + vertical_spacing * 4, 
+                5 + vertical_spacing * 5, 
                 right, 
-                5 + vertical_spacing * 5
+                bottom
             );
-        } else {
-            for i in (last_day % 7 + 1)..7 {
-                self.screen_text[bottom - vertical_spacing][horizontal_spacing * i + 1] = '┴';
-            }
         }
     }
 

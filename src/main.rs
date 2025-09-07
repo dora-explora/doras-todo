@@ -70,7 +70,6 @@ fn main() -> Result<()> {
     stdout.execute(terminal::DisableLineWrap)?;
 
     let mut app = App::new(stdout, tasks, width as usize, height as usize);
-    // app.today = NaiveDate::from_ymd_opt(2025, 10, 1).unwrap();
     app.run()?;
 
     terminal::disable_raw_mode()?;
